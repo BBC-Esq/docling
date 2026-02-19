@@ -1,20 +1,10 @@
-import logging
-from collections.abc import Iterable
+import warnings
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Union
 
-import pypdfium2 as pdfium
-from docling_core.types.doc import BoundingBox, CoordOrigin
-from docling_core.types.doc.page import SegmentedPdfPage, TextCell
-from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
-from PIL import Image
-from pypdfium2 import PdfPage
-
-from docling.backend.pdf_backend import PdfDocumentBackend, PdfPageBackend
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 from docling.datamodel.backend_options import PdfBackendOptions
-from docling.datamodel.base_models import Size
-from docling.utils.locks import pypdfium2_lock
 
 if TYPE_CHECKING:
     from docling.datamodel.document import InputDocument
@@ -196,65 +186,10 @@ class DoclingParseV4DocumentBackend(PdfDocumentBackend):
         path_or_stream: Union[BytesIO, Path],
         options: PdfBackendOptions = PdfBackendOptions(),
     ):
+        warnings.warn(
+            "DoclingParseV4DocumentBackend was removed in docling 2.74.0 and will raise an "
+            "error in a future release. Use DoclingParseDocumentBackend instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         super().__init__(in_doc, path_or_stream, options)
-
-        password = (
-            self.options.password.get_secret_value() if self.options.password else None
-        )
-        with pypdfium2_lock:
-            self._pdoc = pdfium.PdfDocument(self.path_or_stream, password=password)
-        self.parser = DoclingPdfParser(loglevel="fatal")
-        self.dp_doc: PdfDocument = self.parser.load(
-            path_or_stream=self.path_or_stream, password=password
-        )
-        success = self.dp_doc is not None
-
-        if not success:
-            raise RuntimeError(
-                f"docling-parse v4 could not load document {self.document_hash}."
-            )
-
-    def page_count(self) -> int:
-        # return len(self._pdoc)  # To be replaced with docling-parse API
-
-        len_1 = len(self._pdoc)
-        len_2 = self.dp_doc.number_of_pages()
-
-        if len_1 != len_2:
-            _log.error(f"Inconsistent number of pages: {len_1}!={len_2}")
-
-        return len_2
-
-    def load_page(
-        self, page_no: int, create_words: bool = True, create_textlines: bool = True
-    ) -> DoclingParseV4PageBackend:
-        with pypdfium2_lock:
-            ppage = self._pdoc[page_no]
-
-        return DoclingParseV4PageBackend(
-            dp_doc=self.dp_doc,
-            page_obj=ppage,
-            page_no=page_no,
-            create_words=create_words,
-            create_textlines=create_textlines,
-        )
-
-    def is_valid(self) -> bool:
-        return self.page_count() > 0
-
-    def unload(self):
-        super().unload()
-        # Unload docling-parse document first
-        if self.dp_doc is not None:
-            self.dp_doc.unload()
-            self.dp_doc = None
-
-        # Then close pypdfium2 document with proper locking
-        if self._pdoc is not None:
-            with pypdfium2_lock:
-                try:
-                    self._pdoc.close()
-                except Exception:
-                    # Ignore cleanup errors
-                    pass
-            self._pdoc = None

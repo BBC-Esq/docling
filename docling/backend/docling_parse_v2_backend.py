@@ -1,37 +1,21 @@
-import logging
-import random
-from collections.abc import Iterable
+import warnings
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Union
 
-import pypdfium2 as pdfium
-from docling_core.types.doc import BoundingBox, CoordOrigin
-from docling_core.types.doc.page import (
-    BoundingRectangle,
-    PdfPageBoundaryType,
-    PdfPageGeometry,
-    SegmentedPdfPage,
-    TextCell,
-)
-from docling_parse.pdf_parsers import pdf_parser_v2
-from PIL import Image, ImageDraw
-from pypdfium2 import PdfPage
-
-from docling.backend.pdf_backend import PdfDocumentBackend, PdfPageBackend
-from docling.backend.pypdfium2_backend import get_pdf_page_geometry
-from docling.datamodel.base_models import Size
-from docling.utils.locks import pypdfium2_lock
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+from docling.datamodel.backend_options import PdfBackendOptions
 
 if TYPE_CHECKING:
     from docling.datamodel.document import InputDocument
 
-_log = logging.getLogger(__name__)
 
-
-class DoclingParseV2PageBackend(PdfPageBackend):
+class DoclingParseV2DocumentBackend(DoclingParseDocumentBackend):
     def __init__(
-        self, parser: pdf_parser_v2, document_hash: str, page_no: int, page_obj: PdfPage
+        self,
+        in_doc: "InputDocument",
+        path_or_stream: Union[BytesIO, Path],
+        options: PdfBackendOptions = PdfBackendOptions(),
     ):
         self._ppage = page_obj
         parsed_page = parser.parse_pdf_from_key_on_page(document_hash, page_no)

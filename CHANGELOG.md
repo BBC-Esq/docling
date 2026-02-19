@@ -1,3 +1,23 @@
+## [v2.74.0](https://github.com/docling-project/docling/releases/tag/v2.74.0) - 2026-02-17
+
+### Feature
+
+* Introduce docling-parse v5 and deprecate old docling-parse backends ([#2872](https://github.com/docling-project/docling/issues/2872)) ([`bf417e6`](https://github.com/docling-project/docling/commit/bf417e6d264ebaf93bda7f53534e2cc50ccb2284))
+
+### Fix
+
+* Security vulnerabilities with XML External Entity and related attacks ([#3009](https://github.com/docling-project/docling/issues/3009)) ([`576bada`](https://github.com/docling-project/docling/commit/576bada7b7d542ea308778a053bc3c4d49086f20))
+* **csv:** Set default delimiter by default ([#3005](https://github.com/docling-project/docling/issues/3005)) ([`a1b0e3f`](https://github.com/docling-project/docling/commit/a1b0e3fd6bde26466399ea477ae5624d72d24781))
+* Improved deserialization of engine_options ([#3008](https://github.com/docling-project/docling/issues/3008)) ([`dbba6ea`](https://github.com/docling-project/docling/commit/dbba6ea27fd92e2dfcf79e136a96cea5784edf8a))
+
+## [v2.73.1](https://github.com/docling-project/docling/releases/tag/v2.73.1) - 2026-02-13
+
+### Fix
+
+* **asciidoc:** Handle commas in image alt text ([#2983](https://github.com/docling-project/docling/issues/2983)) ([`86b6912`](https://github.com/docling-project/docling/commit/86b691204d2e4c2a54c99d80063e2dd5b5428168))
+* Use timezone-aware datetime ([#2947](https://github.com/docling-project/docling/issues/2947)) ([`e2870f9`](https://github.com/docling-project/docling/commit/e2870f94ed78caeb6db9d735b5a73fa80e5e2104))
+* Add failed pages to DoclingDocument for page break consistency ([#2939](https://github.com/docling-project/docling/issues/2939)) ([`1f91482`](https://github.com/docling-project/docling/commit/1f914826bb07c32766e7db37f86baec3ea772a11))
+
 ## [v2.73.0](https://github.com/docling-project/docling/releases/tag/v2.73.0) - 2026-02-11
 
 ### Feature

@@ -10,6 +10,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    field_validator,
 )
 from typing_extensions import deprecated
 
@@ -33,6 +34,9 @@ from docling.datamodel.layout_model_specs import (
 from docling.datamodel.object_detection_engine_options import (
     BaseObjectDetectionEngineOptions,
 )
+from docling.datamodel.picture_classification_options import (
+    DocumentPictureClassifierOptions,
+)
 from docling.datamodel.pipeline_options_asr_model import InlineAsrOptions
 from docling.datamodel.pipeline_options_vlm_model import (
     ApiVlmOptions,
@@ -55,6 +59,10 @@ from docling.datamodel.vlm_model_specs import (
     SMOLDOCLING_TRANSFORMERS as smoldocling_vlm_conversion_options,
     VlmModelType,
 )
+from docling.models.inference_engines.object_detection.base import (
+    ObjectDetectionEngineOptionsMixin,
+)
+from docling.models.inference_engines.vlm.base import VlmEngineOptionsMixin
 
 _log = logging.getLogger(__name__)
 
@@ -636,7 +644,7 @@ class PictureDescriptionVlmOptions(PictureDescriptionBaseOptions):
 
 
 class PictureDescriptionVlmEngineOptions(
-    StagePresetMixin, PictureDescriptionBaseOptions
+    StagePresetMixin, VlmEngineOptionsMixin, PictureDescriptionBaseOptions
 ):
     """Configuration for VLM runtime-based picture description.
 
@@ -663,9 +671,6 @@ class PictureDescriptionVlmEngineOptions(
 
     model_spec: VlmModelSpec = Field(
         description="Model specification with runtime-specific overrides"
-    )
-    engine_options: BaseVlmEngineOptions = Field(
-        description="Runtime configuration (transformers, mlx, api, etc.)"
     )
     prompt: Annotated[
         str,
@@ -712,7 +717,7 @@ detailed descriptions of image content.
 """
 
 
-class VlmConvertOptions(StagePresetMixin, BaseModel):
+class VlmConvertOptions(StagePresetMixin, VlmEngineOptionsMixin, BaseModel):
     """Configuration for VLM-based document conversion.
 
     This stage uses vision-language models to convert document pages to
@@ -735,10 +740,6 @@ class VlmConvertOptions(StagePresetMixin, BaseModel):
         description="Model specification with runtime-specific overrides"
     )
 
-    engine_options: BaseVlmEngineOptions = Field(
-        description="Runtime configuration (transformers, mlx, api, etc.)"
-    )
-
     scale: float = Field(
         default=2.0, description="Image scaling factor for preprocessing"
     )
@@ -756,7 +757,7 @@ class VlmConvertOptions(StagePresetMixin, BaseModel):
     )
 
 
-class CodeFormulaVlmOptions(StagePresetMixin, BaseModel):
+class CodeFormulaVlmOptions(StagePresetMixin, VlmEngineOptionsMixin, BaseModel):
     """Configuration for VLM-based code and formula extraction.
 
     This stage uses vision-language models to extract code blocks and
@@ -773,10 +774,6 @@ class CodeFormulaVlmOptions(StagePresetMixin, BaseModel):
 
     model_spec: VlmModelSpec = Field(
         description="Model specification with runtime-specific overrides"
-    )
-
-    engine_options: BaseVlmEngineOptions = Field(
-        description="Runtime configuration (transformers, mlx, api, etc.)"
     )
 
     scale: float = Field(
@@ -843,6 +840,12 @@ _default_picture_description_options = PictureDescriptionVlmEngineOptions.from_p
 )
 """Default picture description options using smolvlm preset with AUTO_INLINE runtime."""
 
+# Default picture classification options using document figure classifier preset
+_default_picture_classification_options = DocumentPictureClassifierOptions.from_preset(
+    "document_figure_classifier_v2"
+)
+"""Default picture classification options using document_figure_classifier_v2 preset."""
+
 # Default CodeFormulaVlmOptions using codeformulav2 preset
 _default_code_formula_options = CodeFormulaVlmOptions.from_preset("codeformulav2")
 """Default code/formula options using codeformulav2 preset with AUTO_INLINE runtime."""
@@ -863,9 +866,43 @@ class PdfBackend(str, Enum):
     """
 
     PYPDFIUM2 = "pypdfium2"
-    DLPARSE_V1 = "dlparse_v1"
-    DLPARSE_V2 = "dlparse_v2"
-    DLPARSE_V4 = "dlparse_v4"
+    DOCLING_PARSE = "docling_parse"
+
+    # Deprecated - these map to DOCLING_PARSE
+    DLPARSE_V1 = "dlparse_v1"  # deprecated
+    DLPARSE_V2 = "dlparse_v2"  # deprecated
+    DLPARSE_V4 = "dlparse_v4"  # deprecated
+
+
+def normalize_pdf_backend(backend: PdfBackend) -> PdfBackend:
+    """Normalize deprecated backend enum values to current ones.
+
+    Args:
+        backend: The PDF backend enum value to normalize.
+
+    Returns:
+        The normalized backend enum value.
+
+    Raises:
+        DeprecationWarning: If a deprecated backend value is used.
+    """
+    import warnings
+
+    deprecated_mapping = {
+        PdfBackend.DLPARSE_V1: PdfBackend.DOCLING_PARSE,
+        PdfBackend.DLPARSE_V2: PdfBackend.DOCLING_PARSE,
+        PdfBackend.DLPARSE_V4: PdfBackend.DOCLING_PARSE,
+    }
+
+    if backend in deprecated_mapping:
+        warnings.warn(
+            f"PdfBackend.{backend.name} was previously deprecated and removed in this docling version. Using PdfBackend.DOCLING_PARSE instead. ",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return deprecated_mapping[backend]
+
+    return backend
 
 
 # Define an enum for the ocr engines
@@ -963,6 +1000,15 @@ class ConvertPipelineOptions(PipelineOptions):
             )
         ),
     ] = False
+    picture_classification_options: Annotated[
+        DocumentPictureClassifierOptions,
+        Field(
+            description=(
+                "Configuration for picture classification model/runtime. "
+                "Supports selecting transformers, onnxruntime, or remote api_kserve_v2 inference engines."
+            )
+        ),
+    ] = _default_picture_classification_options
     do_picture_description: Annotated[
         bool,
         Field(
@@ -1101,7 +1147,11 @@ class LayoutOptions(BaseLayoutOptions):
     ] = DOCLING_LAYOUT_HERON
 
 
-class LayoutObjectDetectionOptions(ObjectDetectionStagePresetMixin, BaseLayoutOptions):
+class LayoutObjectDetectionOptions(
+    ObjectDetectionStagePresetMixin,
+    ObjectDetectionEngineOptionsMixin,
+    BaseLayoutOptions,
+):
     """Options for layout detection using object-detection runtimes."""
 
     kind: ClassVar[str] = "layout_object_detection"
@@ -1121,10 +1171,6 @@ class LayoutObjectDetectionOptions(ObjectDetectionStagePresetMixin, BaseLayoutOp
             deep=True
         ),
         description="Object-detection model specification for layout analysis",
-    )
-
-    engine_options: BaseObjectDetectionEngineOptions = Field(
-        description="Runtime configuration for the object-detection engine",
     )
 
 

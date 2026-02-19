@@ -26,7 +26,14 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
-from docling_core.types.doc import DocItem, ImageRef, PictureItem, TableItem
+from docling_core.types.doc import (
+    DocItem,
+    ImageRef,
+    PageItem,
+    PictureItem,
+    Size,
+    TableItem,
+)
 
 from docling.backend.abstract_backend import AbstractDocumentBackend
 from docling.backend.pdf_backend import PdfDocumentBackend
@@ -460,6 +467,7 @@ class StandardPdfPipeline(ConvertPipeline):
             options=self.pipeline_options.layout_options,
             artifacts_path=art_path,
             accelerator_options=self.pipeline_options.accelerator_options,
+            enable_remote_services=self.pipeline_options.enable_remote_services,
         )
         table_factory = get_table_structure_factory(
             allow_external_plugins=self.pipeline_options.allow_external_plugins
@@ -469,6 +477,7 @@ class StandardPdfPipeline(ConvertPipeline):
             enabled=self.pipeline_options.do_table_structure,
             artifacts_path=art_path,
             accelerator_options=self.pipeline_options.accelerator_options,
+            enable_remote_services=self.pipeline_options.enable_remote_services,
         )
         self.assemble_model = PageAssembleModel(options=PageAssembleOptions())
         self.reading_order_model = ReadingOrderModel(options=ReadingOrderOptions())
@@ -839,7 +848,74 @@ class StandardPdfPipeline(ConvertPipeline):
                         )
                     )
 
+            # Add failed pages to DoclingDocument.pages to preserve page numbering
+            # This ensures page break markers are generated for skipped/failed pages
+            self._add_failed_pages_to_document(conv_res)
+
         return conv_res
+
+    def _add_failed_pages_to_document(self, conv_res: ConversionResult) -> None:
+        """Add failed/skipped pages to DoclingDocument.pages.
+
+        This ensures that page break markers are correctly generated for documents
+        where some pages failed to parse. Without this, export functions would not
+        know about the missing pages and would generate incorrect page break counts.
+
+        The failed pages are added with their size information (if available from
+        the backend) but without any content.
+        """
+        if conv_res.document is None:
+            return
+
+        # Determine which pages were expected to be processed
+        start_page, end_page = conv_res.input.limits.page_range
+        expected_page_nos = set(
+            range(
+                max(1, start_page),
+                min(conv_res.input.page_count, end_page) + 1,
+            )
+        )
+
+        # Find pages that are missing from the document
+        existing_page_nos = set(conv_res.document.pages.keys())
+        missing_page_nos = expected_page_nos - existing_page_nos
+
+        if not missing_page_nos:
+            return
+
+        # Try to get size information from the backend for missing pages
+        backend = conv_res.input._backend
+        for page_no in sorted(missing_page_nos):
+            try:
+                # Attempt to get page size from backend
+                if isinstance(backend, PdfDocumentBackend):
+                    page_backend = backend.load_page(page_no - 1)
+                    try:
+                        if page_backend.is_valid():
+                            size = page_backend.get_size()
+                        else:
+                            # Use a default size if page backend is invalid
+                            size = Size(width=0.0, height=0.0)
+                    finally:
+                        page_backend.unload()
+                else:
+                    size = Size(width=0.0, height=0.0)
+            except Exception:
+                # If we can't get size, use default
+                size = Size(width=0.0, height=0.0)
+
+            # Add the failed page to the document's pages dict
+            conv_res.document.pages[page_no] = PageItem(
+                page_no=page_no,
+                size=size,
+                image=None,
+            )
+
+        _log.debug(
+            "Added %d failed/skipped pages to document: %s",
+            len(missing_page_nos),
+            sorted(missing_page_nos),
+        )
 
     # ---------------------------------------------------------------- misc
     @classmethod
