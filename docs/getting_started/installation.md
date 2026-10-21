@@ -155,6 +155,19 @@ doc_converter = DocumentConverter(
         echo "Set TESSDATA_PREFIX=${TESSDATA_PREFIX}"
         ```
 
+    === "Windows (via [winget](https://learn.microsoft.com/windows/package-manager/winget/))"
+
+        ```console
+        winget install UB-Mannheim.TesseractOCR
+        $env:Path += ";C:\Program Files\Tesseract-OCR"
+        $env:TESSDATA_PREFIX = "C:\Program Files\Tesseract-OCR\tessdata\"
+        ```
+
+        These PowerShell commands use the default installation folder and set `PATH` and
+        `TESSDATA_PREFIX` for the current session only. To keep them, add them to your user
+        environment variables. Docling's `tesseract` engine (`TesseractCliOcrOptions`) needs only
+        `tesseract.exe` on `PATH`, or its full path in the `tesseract_cmd` option.
+
     <h4>Linking to Tesseract</h4>
     The most efficient usage of the Tesseract library is via linking. Docling is using
     the [Tesserocr](https://github.com/sirfz/tesserocr) package for this.
@@ -166,6 +179,21 @@ doc_converter = DocumentConverter(
     pip uninstall tesserocr
     pip install --no-binary :all: tesserocr
     ```
+
+    On Windows, PyPI has no prebuilt Tesserocr wheels, so pip tries to compile Tesserocr from
+    source. Instead, you can install a community-built wheel from
+    [tesserocr-windows_build](https://github.com/simonflueckiger/tesserocr-windows_build/releases).
+    The Docling and Tesserocr projects do not maintain these wheels. Download the wheel for your
+    Python version (for example `cp312` for Python 3.12) from a release built with Tesseract 5,
+    install it, and then install Docling with the `tesserocr` extra:
+
+    ```console
+    pip install tesserocr-<version>-cp312-cp312-win_amd64.whl
+    pip install "docling[tesserocr]"
+    ```
+
+    The wheel includes Tesseract itself but not its language files, so `TESSDATA_PREFIX` must
+    point to a `tessdata` folder, for example the one from the Windows installation above.
 
 ??? "Nemotron OCR installation"
 
